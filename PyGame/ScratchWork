@@ -1,0 +1,23 @@
+import pygame, os, sys
+from pygame.locals import *
+
+pygame.init()
+fpsclock = pygame.time.Clock()
+height = 600
+width = 800
+surface = pygame.display.set_mode((width,height))
+background = pygame.Color(100,149,237)
+
+car = pygame.image.load('car.png')
+
+while True:
+    surface.fill(background)
+    surface.blit(car,(width/2,height/2))
+
+    for event in pygame.event.get():
+        if event.type == QUIT:
+            pygame.quit()
+            sys.exit()
+
+    pygame.display.update()
+    fpsclock.tick(30)
