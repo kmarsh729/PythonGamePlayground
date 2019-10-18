@@ -37,11 +37,28 @@ class GameData:
 
 
 def loseLife(gamedata):
-    pass
+    gamedata.lives -= 1
+    gamedata.direction = 0
+    gamedata.blocks[:] = []
+    gamedata.blocks.append(Position(20, 15))
+    gamedata.blocks.append(Position(19, 15))
 
 
 def positionBerry(gamedata):
-    pass
+    bx = np.random.randint(1,38)
+    by = np.random.randint(1,28)
+    found = True
+    while(found):
+        found = False
+        for b in gamedata.blocks:
+            if b.x == bx and b.y == by:
+                found = True
+
+        if found:
+            bx = np.random.randint(1, 38)
+            by = np.random.randint(1, 28)
+
+    gamedata.berry = Position(bx,by)
 
 
 def loadMapFile(fileName):
@@ -52,10 +69,24 @@ def loadMapFile(fileName):
 
 
 def headHitBody(gamedata):
+    head = gamedata.blocks[0]
+    for b in gamedata.blocks:
+        if(b != head):
+            if(b.x == head.x and b.y == head.y):
+                return True
     return False
 
 
 def headHitWall(map, gamedata):
+    row = 0
+    for line in map:
+        col = 0
+        for char in line:
+            if char == '1':
+                if gamedata.blocks[0].x == col and gamedata.blocks[0].y == row:
+                    return True
+            col += 1
+        row += 1
     return False
 
 
@@ -143,17 +174,26 @@ def updateGame(gamedata, gameTime):
     elif keys[K_UP] and gamedata.direction != 3:
         gamedata.direction = 2
 
-    if(head.x == gamedata.berry.x and head.y == gamedata.berry.y):
+    if head.x == gamedata.berry.x and head.y == gamedata.berry.y:
         lastIdx = len(gamedata.blocks) - 1
         for i in range(gamedata.segments):
             blockX = gamedata.blocks[lastIdx].x
             blockY = gamedata.blocks[lastIdx].y
             gamedata.blocks.append(Position(blockX,blockY))
 
-        bx = np.random.randint(1, 38)
-        by = np.random.randint(1, 28)
-        gamedata.berry = Position(bx, by)
+        positionBerry(gamedata)
         gamedata.berrycount += 1
+
+    if gamedata.berrycount == 10:
+        gamedata.berrycount = 0
+        gamedata.speed -= 25
+        gamedata.level += 1
+        gamedata.segments *= 2
+        if gamedata.segments > 64:
+            gamedata.segments = 64
+
+        if gamedata.speed < 100:
+            gamedata.speed = 100
 
 
 def loadImages():
