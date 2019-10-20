@@ -1,8 +1,10 @@
 import pygame
 import sys
 import numpy as np
+import scipy as sp
 
 from pygame.locals import *
+from scipy.special import *
 
 pygame.init()
 fpsClock = pygame.time.Clock()
@@ -15,22 +17,71 @@ font = pygame.font.Font(None, 32)
 # The NN #
 ##########
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+
+def loadFile(fileName):
+    f = open(fileName, 'r')
+    content = f.readlines()
+    f.close()
+    return content
+
+names = loadFile('names.txt')
+for i in range(len(names)):
+    names[i] = names[i].replace('\n','')
+
+def mutateNames(name1, name2):
+    new_name = ''
+    for i in range(len(name1)):
+        prob = np.random.random()
+        if(prob < 0.5):
+            new_name += name1[i]
+        else:
+            new_name += name2[i]
+
+
 class SnakeNN:
-    def __init__(self, weights=[]):
+    def __init__(self, weights=[], name = 'satan'):
+        self.name = name
         self.num_inputs_nodes = 9
         self.num_hidden_nodes = 12
         self.num_output_nodes = 4
         self.num_weights = self.num_inputs_nodes * self.num_hidden_nodes + self.num_hidden_nodes * self.num_output_nodes
-
+        self.input_nodes = np.array(self.num_inputs_nodes).reshape(-1, 1)
+        self.hidden_nodes = np.array(self.num_hidden_nodes).reshape(-1, 1)
+        self.output_nodes = np.array(self.num_output_nodes).reshape(-1, 1)
         if len(weights) != 0 and len(weights) != self.num_weights:
             sys.stderr("Weights given to the snake\'s NN aren't the right length.  Brain surgery isn't for you.")
-            random_weights = np.random.random(self.num_weights)
+            random_weights = np.random.rand(self.num_weights)
             self.weights = np.array(random_weights)
         elif len(weights) == self.num_weights:
             self.weights = np.array(weights)
         else:
-            random_weights = self.num_weights
+            random_weights = np.random.rand(self.num_weights)
             self.weights = np.array(random_weights)
+
+        # print(self.weights)
+
+        self.input_to_hidden = self.weights[:self.num_inputs_nodes * self.num_hidden_nodes].reshape(
+            self.num_hidden_nodes, self.num_inputs_nodes)
+
+        self.hidden_to_output = self.weights[self.num_inputs_nodes * self.num_hidden_nodes:].reshape(
+            self.num_output_nodes, self.num_hidden_nodes)
+
+    def fire(self, input_list):
+        if len(input_list) != self.num_inputs_nodes:
+            sys.stderr("Input dimension mismatch.  Can't fire things.")
+            return
+        self.input_nodes = np.array(input_list).reshape(-1, 1)
+
+        self.hidden_nodes = self.input_to_hidden.dot(self.input_nodes)
+        np.apply_along_axis(sigmoid, 0, self.hidden_nodes)
+        self.output_nodes = self.hidden_to_output.dot(self.hidden_nodes)
+        print(sp.special.softmax(self.output_nodes))
+
+    def getBestDirection(self):
+        return self.output_nodes.argmax()
 
     def getDirectionToMove(self, direction, head_x, head_y, food_x, food_y, body_distance):
         # Input Node Guide:
@@ -46,10 +97,10 @@ class SnakeNN:
 
         ### Useful Values
 
-        WallPercentX = head_x/40
-        WallPercentY = head_y/30
-        FoodPercentX = (head_x-food_x)/40
-        FoodPercentY = (head_y-food_y)/30
+        WallPercentX = head_x / 40
+        WallPercentY = head_y / 30
+        FoodPercentX = (head_x - food_x) / 40
+        FoodPercentY = (head_y - food_y) / 30
 
         ###
 
@@ -75,6 +126,7 @@ class GameData:
         self.berrycount = 0  # Number berries eaten
         self.segments = 1  # Segments gained upon eating a berry
         self.frame = 0
+        self.snakey = SnakeNN(name = names[np.random.randint(0,len(names))] + ' ' + names[np.random.randint(0,len(names))])
 
         bx = np.random.randint(1, 38)
         by = np.random.randint(1, 28)
@@ -107,13 +159,6 @@ def positionBerry(gamedata):
     gamedata.berry = Position(bx, by)
 
 
-def loadMapFile(fileName):
-    f = open(fileName, 'r')
-    content = f.readlines()
-    f.close()
-    return content
-
-
 def headHitBody(gamedata):
     head = gamedata.blocks[0]
     for b in gamedata.blocks:
@@ -137,8 +182,8 @@ def headHitWall(map, gamedata):
 
 
 def drawData(surface, gamedata):
-    text = "Berries = {0}, Generation = {1}"
-    info = text.format(gamedata.berrycount, 69)
+    text = "{0}: Berries = {1}, Generation = {2}"
+    info = text.format(gamedata.snakey.name, gamedata.berrycount, 69)
     text = font.render(info, 0, (255, 255, 255))
     textpos = text.get_rect(centerx=surface.get_width() / 2, top=32)
     surface.blit(text, textpos)
@@ -221,15 +266,20 @@ def updateGame(gamedata, time):
 
     updateMovement(gamedata)
 
-    keys = pygame.key.get_pressed()
-    if keys[K_RIGHT] and gamedata.direction != 1:
+    gamedata.snakey.fire(np.random.random(9))
+    directiondesired = gamedata.snakey.getBestDirection()
+    if directiondesired == 0 and gamedata.direction != 1:
         gamedata.direction = 0
-    elif keys[K_LEFT] and gamedata.direction != 0:
+
+    elif directiondesired == 1 and gamedata.direction != 0:
         gamedata.direction = 1
-    elif keys[K_DOWN] and gamedata.direction != 2:
+        gamedata.snakey.fire(np.random.random(9))
+    elif directiondesired == 3 and gamedata.direction != 2:
         gamedata.direction = 3
-    elif keys[K_UP] and gamedata.direction != 3:
+        gamedata.snakey.fire(np.random.random(9))
+    elif directiondesired == 2 and gamedata.direction != 3:
         gamedata.direction = 2
+        gamedata.snakey.fire(np.random.random(9))
 
     head = gamedata.blocks[0]
     if head.x == gamedata.berry.x and head.y == gamedata.berry.y:
@@ -251,7 +301,7 @@ def loadImages():
 
 images = loadImages()
 images['berry'].set_colorkey((255, 0, 255))  # Purple pixels will be transparent
-snakeMap = loadMapFile('map.txt')
+snakeMap = loadFile('map.txt')
 data = GameData()
 quitGame = False
 isPlaying = False
