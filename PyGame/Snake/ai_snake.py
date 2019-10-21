@@ -23,6 +23,8 @@ currentPopulation = -1
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
+def ReLu(x):
+    return np.max(0,x)
 
 def loadFile(fileName):
     f = open(fileName, 'r')
@@ -81,7 +83,7 @@ class SnakeNN:
         self.input_nodes = np.array(input_list).reshape(-1, 1)
 
         self.hidden_nodes = self.input_to_hidden.dot(self.input_nodes)
-        np.apply_along_axis(sigmoid, 0, self.hidden_nodes)
+        self.hidden_nodes = np.maximum(self.hidden_nodes,0)
         self.output_nodes = self.hidden_to_output.dot(self.hidden_nodes)
         self.output_nodes = sp.special.softmax(self.output_nodes)
 

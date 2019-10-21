@@ -94,7 +94,7 @@ def drawData(surface, gamedata):
     text = "Lives = {0}, Level = {1}"
     info = text.format(gamedata.lives, gamedata.level)
     text = font.render(info, 0, (255, 255, 255))
-    textpos = text.get_rect(centerx=surface.get_width() / 2, top=32)
+    textpos = text.get_rect(centerx=surface.get_width() / 2, top=0)
     surface.blit(text, textpos)
 
 
@@ -179,7 +179,7 @@ def updateGame(gamedata, gameTime):
         for i in range(gamedata.segments):
             blockX = gamedata.blocks[lastIdx].x
             blockY = gamedata.blocks[lastIdx].y
-            gamedata.blocks.append(Position(blockX,blockY))
+            gamedata.blocks.append(Position(blockX, blockY))
 
         positionBerry(gamedata)
         gamedata.berrycount += 1
@@ -202,7 +202,7 @@ def loadImages():
     snake = pygame.image.load('snake.png')
     return {'wall': wall, 'berry': berry, 'snake': snake}
 
-
+# Start the game
 images = loadImages()
 images['berry'].set_colorkey((255, 0, 255))  # Purple pixels will be transparent
 snakemap = loadMapFile('map.txt')
@@ -219,9 +219,9 @@ while not quitGame:
         x = np.random.randint(1, 38)
         y = np.random.randint(1, 28)
 
-        rrect = images['berry'].get_rect()
-        rrect.left = data.berry.x * 16
-        rrect.top = data.berry.y * 16
+        rect = images['berry'].get_rect()
+        rect.left = data.berry.x * 16
+        rect.top = data.berry.y * 16
 
         # Do update stuff here
         updateGame(data, fpsClock.get_time())
@@ -237,7 +237,7 @@ while not quitGame:
 
         # Draw stuff here
         drawWalls(surface, images['wall'], snakemap)
-        surface.blit(images['berry'], rrect)
+        surface.blit(images['berry'], rect)
         drawSnake(surface, images['snake'], data)
         drawData(surface, data)
     else:
