@@ -11,6 +11,9 @@ fpsClock = pygame.time.Clock()
 
 gameSurface = pygame.display.set_mode((640, 480))
 font = pygame.font.Font(None, 32)
+currentGeneration = 0
+popSize = 5
+currentPopulation = -1
 
 
 ##########
@@ -27,22 +30,24 @@ def loadFile(fileName):
     f.close()
     return content
 
+
 names = loadFile('names.txt')
 for i in range(len(names)):
-    names[i] = names[i].replace('\n','')
+    names[i] = names[i].replace('\n', '')
+
 
 def mutateNames(name1, name2):
     new_name = ''
     for i in range(len(name1)):
         prob = np.random.random()
-        if(prob < 0.5):
+        if (prob < 0.5):
             new_name += name1[i]
         else:
             new_name += name2[i]
 
 
 class SnakeNN:
-    def __init__(self, weights=[], name = 'satan'):
+    def __init__(self, weights=[], name='satan'):
         self.name = name
         self.num_inputs_nodes = 9
         self.num_hidden_nodes = 12
@@ -78,33 +83,39 @@ class SnakeNN:
         self.hidden_nodes = self.input_to_hidden.dot(self.input_nodes)
         np.apply_along_axis(sigmoid, 0, self.hidden_nodes)
         self.output_nodes = self.hidden_to_output.dot(self.hidden_nodes)
-        print(sp.special.softmax(self.output_nodes))
+        self.output_nodes = sp.special.softmax(self.output_nodes)
 
     def getBestDirection(self):
         return self.output_nodes.argmax()
 
-    def getDirectionToMove(self, direction, head_x, head_y, food_x, food_y, body_distance):
-        # Input Node Guide:
+    def preprocessInputs(self, direction, head_x, head_y, food_r, food_l, food_u, food_d, body_r, body_l, body_u,
+                         body_d):
+        # Input Node Guide (All these should be normalized):
         # 0 - distance to wall from front of head
         # 1 - distance to wall from right of head
-        # 2 - distance to wall from left of head
+        # 2 - distance to wall from left of head. Redundant but maybe cool to use if we put obstacles.
         # 3 - distance to body from front of head
         # 4 - distance to body from right of head
         # 5 - distance to body from left of head
         # 6 - distance to food from front of head
         # 7 - distance to food from right of head
-        # 8 - distance to food from left of head
+        # 8 - distance to food from left of head. Also redundant but maybe add more food?
 
-        ### Useful Values
+        if direction == 0:
+            return [1 - head_x / 40, 1 - head_y / 30, head_y / 30, body_r / 40, body_d / 30, body_u / 30, food_r / 40,
+                    food_d / 30, food_u / 30]
 
-        WallPercentX = head_x / 40
-        WallPercentY = head_y / 30
-        FoodPercentX = (head_x - food_x) / 40
-        FoodPercentY = (head_y - food_y) / 30
+        elif direction == 1:
+            return [head_x / 40, head_y / 30, 1 - head_y / 30, body_l / 40, body_u / 30, body_d / 30, food_l / 40,
+                    food_u / 30, food_d / 30]
 
-        ###
+        elif direction == 2:
+            return [head_y / 30, 1 - head_x / 40, head_x / 40, body_u / 30, body_r / 40, body_l / 40, food_u / 30,
+                    food_r / 40, food_l / 40]
 
-
+        else:
+            return [1 - head_y / 30, head_x / 40, 1 - head_x / 40, body_d / 30, body_l / 40, body_r / 40, food_d / 30,
+                    food_l / 40, food_r / 40]
 ##########################
 # Data Container Classes #
 ##########################
@@ -116,7 +127,7 @@ class Position:
 
 
 class GameData:
-    def __init__(self):
+    def __init__(self, snake):
         self.lives = 1
         self.isDead = False
         self.blocks = []
@@ -126,7 +137,8 @@ class GameData:
         self.berrycount = 0  # Number berries eaten
         self.segments = 1  # Segments gained upon eating a berry
         self.frame = 0
-        self.snakey = SnakeNN(name = names[np.random.randint(0,len(names))] + ' ' + names[np.random.randint(0,len(names))])
+        self.snakey = SnakeNN(
+            name=names[np.random.randint(0, len(names))] + ' ' + names[np.random.randint(0, len(names))])
 
         bx = np.random.randint(1, 38)
         by = np.random.randint(1, 28)
@@ -162,10 +174,82 @@ def positionBerry(gamedata):
 def headHitBody(gamedata):
     head = gamedata.blocks[0]
     for b in gamedata.blocks:
-        if (b != head):
-            if (b.x == head.x and b.y == head.y):
+        if b != head:
+            if b.x == head.x and b.y == head.y:
                 return True
     return False
+
+
+def headFromBodyLeft(gamedata):
+    head = gamedata.blocks[0]
+    distance = 40
+    for b in gamedata.blocks:
+        if b != head:
+            if b.x < head.x and b.y == head.y:
+                distance = min(head.x - b.x, distance)
+    return distance
+
+
+def headFromBodyRight(gamedata):
+    head = gamedata.blocks[0]
+    distance = 40
+    for b in gamedata.blocks:
+        if b != head:
+            if b.x > head.x and b.y == head.y:
+                distance = min(b.x - head.x, distance)
+    return distance
+
+
+def headFromBodyUp(gamedata):
+    head = gamedata.blocks[0]
+    distance = 30
+    for b in gamedata.blocks:
+        if b != head:
+            if b.x == head.x and b.y < head.y:
+                distance = min(head.y - b.y, distance)
+    return distance
+
+
+def headFromBodyDown(gamedata):
+    head = gamedata.blocks[0]
+    distance = 30
+    for b in gamedata.blocks:
+        if b != head:
+            if b.x == head.x and b.y > head.y:
+                distance = min(b.y - head.y, distance)
+    return distance
+
+
+def headFromFoodLeft(gamedata):
+    head = gamedata.blocks[0]
+    distance = 40
+    if gamedata.berry.x < head.x and gamedata.berry.y == head.y:
+        distance = min(head.x - gamedata.berry.x, distance)
+    return distance
+
+
+def headFromFoodRight(gamedata):
+    head = gamedata.blocks[0]
+    distance = 40
+    if gamedata.berry.x > head.x and gamedata.berry.y == head.y:
+        distance = min(gamedata.berry.x - head.x, distance)
+    return distance
+
+
+def headFromFoodUp(gamedata):
+    head = gamedata.blocks[0]
+    distance = 30
+    if gamedata.berry.x == head.x and gamedata.berry.y < head.y:
+        distance = min(head.y - gamedata.berry.y, distance)
+    return distance
+
+
+def headFromFoodDown(gamedata):
+    head = gamedata.blocks[0]
+    distance = 30
+    if gamedata.berry.x == head.x and gamedata.berry.y > head.y:
+        distance = min(gamedata.berry.y - head.y, distance)
+    return distance
 
 
 def headHitWall(map, gamedata):
@@ -182,8 +266,11 @@ def headHitWall(map, gamedata):
 
 
 def drawData(surface, gamedata):
-    text = "{0}: Berries = {1}, Generation = {2}"
-    info = text.format(gamedata.snakey.name, gamedata.berrycount, 69)
+    text = "{0}: Score = {1}"
+    pygame.display.set_caption(
+        'Generation ' + str(currentGeneration) + ' - Current Specimen ' + str(currentPopulation + 1) + '/' + str(
+            popSize))
+    info = text.format(gamedata.snakey.name, gamedata.berrycount)
     text = font.render(info, 0, (255, 255, 255))
     textpos = text.get_rect(centerx=surface.get_width() / 2, top=32)
     surface.blit(text, textpos)
@@ -266,22 +353,21 @@ def updateGame(gamedata, time):
 
     updateMovement(gamedata)
 
-    gamedata.snakey.fire(np.random.random(9))
+    head = gamedata.blocks[0]
+
+    gamedata.snakey.fire(gamedata.snakey.preprocessInputs(gamedata.direction, head.x, head.y, headFromFoodRight(gamedata), headFromFoodLeft(gamedata), headFromBodyUp(gamedata), headFromBodyDown(gamedata), headFromFoodRight(gamedata), headFromBodyLeft(gamedata), headFromBodyUp(gamedata),
+                         headFromBodyDown(gamedata)))
     directiondesired = gamedata.snakey.getBestDirection()
     if directiondesired == 0 and gamedata.direction != 1:
         gamedata.direction = 0
-
     elif directiondesired == 1 and gamedata.direction != 0:
         gamedata.direction = 1
-        gamedata.snakey.fire(np.random.random(9))
     elif directiondesired == 3 and gamedata.direction != 2:
         gamedata.direction = 3
-        gamedata.snakey.fire(np.random.random(9))
     elif directiondesired == 2 and gamedata.direction != 3:
         gamedata.direction = 2
-        gamedata.snakey.fire(np.random.random(9))
 
-    head = gamedata.blocks[0]
+
     if head.x == gamedata.berry.x and head.y == gamedata.berry.y:
         addSegment(gamedata)
         positionBerry(gamedata)
@@ -299,12 +385,19 @@ def loadImages():
 # Actual Game Execution Code #
 ##############################
 
+
 images = loadImages()
 images['berry'].set_colorkey((255, 0, 255))  # Purple pixels will be transparent
 snakeMap = loadFile('map.txt')
-data = GameData()
+# data = GameData()
 quitGame = False
 isPlaying = False
+
+gds = []
+for i in range(popSize):
+    gds.append(GameData(SnakeNN()))
+
+print(currentPopulation)
 
 while not quitGame:
     for event in pygame.event.get():
@@ -337,12 +430,30 @@ while not quitGame:
         drawSnake(gameSurface, images['snake'], data)
         drawData(gameSurface, data)
     else:
-        keys = pygame.key.get_pressed()
-        if keys[K_SPACE]:
-            isPlaying = True
-            data = None
-            data = GameData()
-        drawGameOver(gameSurface)
+        # timer = 600.0
+        # while timer > 0.0:
+        #    print(timer)
+        #    timer -= fpsClock.get_time()
+        isPlaying = True
+        data = None
+        if currentPopulation == popSize - 1:
+            print('reached end of population, resetting')
+            currentPopulation = 0
+            currentGeneration += 1
+            gds = []
+
+            for i in range(popSize):
+                gds.append(GameData(SnakeNN()))
+            data = gds[currentPopulation]
+            print(currentPopulation)
+
+
+
+
+        else:
+            currentPopulation += 1
+            data = gds[currentPopulation]
+            print(currentPopulation)
 
     pygame.display.update()
     fpsClock.tick(30)
