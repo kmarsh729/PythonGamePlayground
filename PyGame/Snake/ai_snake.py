@@ -12,7 +12,7 @@ fpsClock = pygame.time.Clock()
 gameSurface = pygame.display.set_mode((640, 480))
 font = pygame.font.Font(None, 32)
 currentGeneration = 0
-popSize = 5
+popSize = 1000
 currentPopulation = -1
 
 
@@ -46,10 +46,11 @@ def mutateNames(name1, name2):
             new_name += name1[i]
         else:
             new_name += name2[i]
+    return new_name
 
 
 class SnakeNN:
-    def __init__(self, weights=[], name='satan'):
+    def __init__(self, weights=[], name = 'satan'):
         self.name = name
         self.num_inputs_nodes = 9
         self.num_hidden_nodes = 12
@@ -118,6 +119,23 @@ class SnakeNN:
         else:
             return [1 - head_y / 30, head_x / 40, 1 - head_x / 40, body_d / 30, body_l / 40, body_r / 40, food_d / 30,
                     food_l / 40, food_r / 40]
+
+def mateSnakes(snake1,snake2, mutationRate):
+    weights1 = snake1.weights
+    weights2 = snake2.weights
+    new_weights = []
+
+    for i in range(min(len(weights1),len(weights2))):
+        if(np.random.rand() < mutationRate):
+            new_weights.append(np.random.rand())
+        else:
+            if(np.random.rand() < 0.5):
+                new_weights.append(weights1[i])
+            else:
+                new_weights.append(weights2[i])
+
+    return SnakeNN(weights = new_weights, name = mutateNames(snake1.name,snake2.name))
+
 ##########################
 # Data Container Classes #
 ##########################
@@ -133,14 +151,13 @@ class GameData:
         self.lives = 1
         self.isDead = False
         self.blocks = []
-        self.tick = 100
-        self.speed = 100
+        self.tick = 50#100
+        self.speed = 50#100
         self.level = 1
         self.berrycount = 0  # Number berries eaten
         self.segments = 1  # Segments gained upon eating a berry
         self.frame = 0
-        self.snakey = SnakeNN(
-            name=names[np.random.randint(0, len(names))] + ' ' + names[np.random.randint(0, len(names))])
+        self.snakey = snake
 
         bx = np.random.randint(1, 38)
         by = np.random.randint(1, 28)
@@ -148,7 +165,8 @@ class GameData:
         self.berry = Position(bx, by)
         self.blocks.append(Position(20, 15))
         self.blocks.append(Position(19, 15))
-        self.direction = 0  # 0 - right, 1 - left, 2 - up, 3 - down
+        self.direction = np.random.randint(4)  # 0 - right, 1 - left, 2 - up, 3 - down
+
 
 
 def loseLife(gamedata):
@@ -369,7 +387,6 @@ def updateGame(gamedata, time):
     elif directiondesired == 2 and gamedata.direction != 3:
         gamedata.direction = 2
 
-
     if head.x == gamedata.berry.x and head.y == gamedata.berry.y:
         addSegment(gamedata)
         positionBerry(gamedata)
@@ -397,7 +414,8 @@ isPlaying = False
 
 gds = []
 for i in range(popSize):
-    gds.append(GameData(SnakeNN()))
+    gds.append(GameData(SnakeNN(
+            name=names[np.random.randint(0, len(names))] + ' ' + names[np.random.randint(0, len(names))])))
 
 print(currentPopulation)
 
@@ -432,22 +450,37 @@ while not quitGame:
         drawSnake(gameSurface, images['snake'], data)
         drawData(gameSurface, data)
     else:
-        # timer = 600.0
-        # while timer > 0.0:
-        #    print(timer)
-        #    timer -= fpsClock.get_time()
         isPlaying = True
         data = None
         if currentPopulation == popSize - 1:
             print('reached end of population, resetting')
             currentPopulation = 0
             currentGeneration += 1
+
+            maxberries = 0
+            strong = []
+
+            for g in gds:
+                if g.berrycount > maxberries:
+                    maxberries = g.berrycount
+
+            for g in gds:
+                if g.berrycount >= 0.5*maxberries:
+                    strong.append(g)
+
+            if len(strong) > 0.75*popSize:
+                strong = strong[:min(int(0.75*popSize), len(strong))]
+
             gds = []
 
             for i in range(popSize):
-                gds.append(GameData(SnakeNN()))
+                gd1 = np.random.choice(strong)
+                gd2 = np.random.choice(strong)
+                new_snake = mateSnakes(gd1.snakey, gd2.snakey, 0.05)
+
+                gds.append(GameData(new_snake))
             data = gds[currentPopulation]
-            print(currentPopulation)
+            #print(currentPopulation)
 
 
 
@@ -455,7 +488,7 @@ while not quitGame:
         else:
             currentPopulation += 1
             data = gds[currentPopulation]
-            print(currentPopulation)
+            #print(currentPopulation)
 
     pygame.display.update()
     fpsClock.tick(30)

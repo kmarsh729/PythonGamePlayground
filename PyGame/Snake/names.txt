@@ -30,3 +30,6 @@ sarah
 micky
 helga
 peter
+greta
+alice
+marty
