@@ -33,3 +33,14 @@ peter
 greta
 alice
 marty
+mario
+spock
+ralph
+lance
+katya
+jorge
+lenin
+luigi
+teddy
+sandy
+danny

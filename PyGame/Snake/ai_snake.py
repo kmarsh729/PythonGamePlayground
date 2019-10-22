@@ -11,9 +11,11 @@ fpsClock = pygame.time.Clock()
 
 gameSurface = pygame.display.set_mode((640, 480))
 font = pygame.font.Font(None, 32)
-currentGeneration = 0
-popSize = 1000
+currentGeneration = 1
+popSize = 100
 currentPopulation = -1
+points_from_berry = 50
+points_from_moving = 1
 
 
 ##########
@@ -61,12 +63,12 @@ class SnakeNN:
         self.output_nodes = np.array(self.num_output_nodes).reshape(-1, 1)
         if len(weights) != 0 and len(weights) != self.num_weights:
             sys.stderr("Weights given to the snake\'s NN aren't the right length.  Brain surgery isn't for you.")
-            random_weights = np.random.rand(self.num_weights)
+            random_weights = np.random.randn(self.num_weights)
             self.weights = np.array(random_weights)
         elif len(weights) == self.num_weights:
             self.weights = np.array(weights)
         else:
-            random_weights = np.random.rand(self.num_weights)
+            random_weights = np.random.randn(self.num_weights)
             self.weights = np.array(random_weights)
 
         # print(self.weights)
@@ -127,7 +129,7 @@ def mateSnakes(snake1,snake2, mutationRate):
 
     for i in range(min(len(weights1),len(weights2))):
         if(np.random.rand() < mutationRate):
-            new_weights.append(np.random.rand())
+            new_weights.append(np.random.randn())
         else:
             if(np.random.rand() < 0.5):
                 new_weights.append(weights1[i])
@@ -163,10 +165,20 @@ class GameData:
         by = np.random.randint(1, 28)
 
         self.berry = Position(bx, by)
-        self.blocks.append(Position(20, 15))
-        self.blocks.append(Position(19, 15))
-        self.direction = np.random.randint(4)  # 0 - right, 1 - left, 2 - up, 3 - down
 
+        self.direction = np.random.randint(4)  # 0 - right, 1 - left, 2 - up, 3 - down
+        if self.direction == 0:
+            self.blocks.append(Position(20, 15))
+            self.blocks.append(Position(19, 15))
+        elif self.direction == 1:
+            self.blocks.append(Position(19, 15))
+            self.blocks.append(Position(20, 15))
+        elif self.direction == 2:
+            self.blocks.append(Position(20, 15))
+            self.blocks.append(Position(20, 16))
+        elif self.direction == 3:
+            self.blocks.append(Position(20, 16))
+            self.blocks.append(Position(20, 15))
 
 
 def loseLife(gamedata):
@@ -341,6 +353,7 @@ def updateMovement(gamedata):
     head = gamedata.blocks[0]
     if gamedata.tick < 0:
         gamedata.tick += gamedata.speed
+        gamedata.berrycount += points_from_moving
         gamedata.frame += 1
         gamedata.frame %= 2
         if gamedata.direction == 0:
@@ -390,7 +403,7 @@ def updateGame(gamedata, time):
     if head.x == gamedata.berry.x and head.y == gamedata.berry.y:
         addSegment(gamedata)
         positionBerry(gamedata)
-        gamedata.berrycount += 1
+        gamedata.berrycount += points_from_berry
 
 
 def loadImages():
@@ -417,7 +430,7 @@ for i in range(popSize):
     gds.append(GameData(SnakeNN(
             name=names[np.random.randint(0, len(names))] + ' ' + names[np.random.randint(0, len(names))])))
 
-print(currentPopulation)
+
 
 while not quitGame:
     for event in pygame.event.get():
@@ -459,24 +472,32 @@ while not quitGame:
 
             maxberries = 0
             strong = []
-
+            # TODO:High berry count should correspond to having a higher chance to be a parent, i.e., size matters.
+            # TODO:Maybe make distribution based Prob = specimen_points / sum(specimen_points)
             for g in gds:
                 if g.berrycount > maxberries:
                     maxberries = g.berrycount
-
+            print(maxberries)
             for g in gds:
                 if g.berrycount >= 0.5*maxberries:
                     strong.append(g)
 
-            if len(strong) > 0.75*popSize:
-                strong = strong[:min(int(0.75*popSize), len(strong))]
 
+            if len(strong) < 0.10*popSize:
+                print("Only %d worthy specimens, we need to add some more."%len(strong))
+                while len(strong) < 0.10*popSize:
+                    strong.append(np.random.choice(gds))
+            else:
+                print("%d worthy specimens, now to make tons of snakelets." % len(strong))
+
+
+            #print(len(strong))
             gds = []
 
             for i in range(popSize):
                 gd1 = np.random.choice(strong)
                 gd2 = np.random.choice(strong)
-                new_snake = mateSnakes(gd1.snakey, gd2.snakey, 0.05)
+                new_snake = mateSnakes(gd1.snakey, gd2.snakey, 0.01)
 
                 gds.append(GameData(new_snake))
             data = gds[currentPopulation]
