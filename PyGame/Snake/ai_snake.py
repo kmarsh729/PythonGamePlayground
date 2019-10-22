@@ -6,40 +6,45 @@ import scipy as sp
 from pygame.locals import *
 from scipy.special import *
 
+# Setup basic variables needed for the population.
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
 pygame.init()
 fpsClock = pygame.time.Clock()
 
 gameSurface = pygame.display.set_mode((640, 480))
 font = pygame.font.Font(None, 32)
 currentGeneration = 1
-popSize = 100
-currentPopulation = -1
-points_from_berry = 50
-points_from_moving = 1
+popSize = 100 # Number of specimens per generation
+currentPopulation = -1 # Stupid counting thing requires we start at -1
+points_from_berry = sigmoid(0.1*currentGeneration-2) #Number of points we get for eating a berry, increases over time
+points_from_moving = 1-sigmoid(0.1*currentGeneration-2) #Number of points we get for avoiding walls, decreases over time
 
 
 ##########
 # The NN #
 ##########
 
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
 
+# One line ReLu activation function.
 def ReLu(x):
     return np.max(0,x)
 
+# Function to load map and names
 def loadFile(fileName):
     f = open(fileName, 'r')
     content = f.readlines()
     f.close()
     return content
 
-
+# Load names for snakes
 names = loadFile('names.txt')
 for i in range(len(names)):
     names[i] = names[i].replace('\n', '')
 
 
+# Function to create new names from old ones
 def mutateNames(name1, name2):
     new_name = ''
     for i in range(len(name1)):
@@ -61,6 +66,8 @@ class SnakeNN:
         self.input_nodes = np.array(self.num_inputs_nodes).reshape(-1, 1)
         self.hidden_nodes = np.array(self.num_hidden_nodes).reshape(-1, 1)
         self.output_nodes = np.array(self.num_output_nodes).reshape(-1, 1)
+
+        # Make sure if we're given weights that the user isn't a complete nitwit.
         if len(weights) != 0 and len(weights) != self.num_weights:
             sys.stderr("Weights given to the snake\'s NN aren't the right length.  Brain surgery isn't for you.")
             random_weights = np.random.randn(self.num_weights)
@@ -71,8 +78,7 @@ class SnakeNN:
             random_weights = np.random.randn(self.num_weights)
             self.weights = np.array(random_weights)
 
-        # print(self.weights)
-
+        # Parse out weights into matrices
         self.input_to_hidden = self.weights[:self.num_inputs_nodes * self.num_hidden_nodes].reshape(
             self.num_hidden_nodes, self.num_inputs_nodes)
 
@@ -80,6 +86,7 @@ class SnakeNN:
             self.num_output_nodes, self.num_hidden_nodes)
 
     def fire(self, input_list):
+        # Make sure the inputs we're given match how many inputs we expect
         if len(input_list) != self.num_inputs_nodes:
             sys.stderr("Input dimension mismatch.  Can't fire things.")
             return
@@ -93,6 +100,7 @@ class SnakeNN:
     def getBestDirection(self):
         return self.output_nodes.argmax()
 
+    # A long and tedious function to process location data for the snake
     def preprocessInputs(self, direction, head_x, head_y, food_r, food_l, food_u, food_d, body_r, body_l, body_u,
                          body_d):
         # Input Node Guide (All these should be normalized):
@@ -122,6 +130,7 @@ class SnakeNN:
             return [1 - head_y / 30, head_x / 40, 1 - head_x / 40, body_d / 30, body_l / 40, body_r / 40, food_d / 30,
                     food_l / 40, food_r / 40]
 
+# Allow snakes to initiate coitus, to make sweet sweet love, to get their funk on, do it like they do on Discovery channel
 def mateSnakes(snake1,snake2, mutationRate):
     weights1 = snake1.weights
     weights2 = snake2.weights
@@ -136,7 +145,7 @@ def mateSnakes(snake1,snake2, mutationRate):
             else:
                 new_weights.append(weights2[i])
 
-    return SnakeNN(weights = new_weights, name = mutateNames(snake1.name,snake2.name))
+    return SnakeNN(weights = new_weights, name = mutateNames(snake1.name, snake2.name))
 
 ##########################
 # Data Container Classes #
@@ -302,7 +311,7 @@ def drawData(surface, gamedata):
     pygame.display.set_caption(
         'Generation ' + str(currentGeneration) + ' - Current Specimen ' + str(currentPopulation + 1) + '/' + str(
             popSize))
-    info = text.format(gamedata.snakey.name, gamedata.berrycount)
+    info = text.format(gamedata.snakey.name, int(gamedata.berrycount))
     text = font.render(info, 0, (255, 255, 255))
     textpos = text.get_rect(centerx=surface.get_width() / 2, top=32)
     surface.blit(text, textpos)
@@ -467,6 +476,10 @@ while not quitGame:
         data = None
         if currentPopulation == popSize - 1:
             print('reached end of population, resetting')
+
+            points_from_berry = sigmoid(0.1*currentGeneration-2)
+            points_from_moving = 1-sigmoid(0.1*currentGeneration-2)
+
             currentPopulation = 0
             currentGeneration += 1
 
@@ -477,7 +490,7 @@ while not quitGame:
             for g in gds:
                 if g.berrycount > maxberries:
                     maxberries = g.berrycount
-            print(maxberries)
+            print("%.2f"%maxberries)
             for g in gds:
                 if g.berrycount >= 0.5*maxberries:
                     strong.append(g)
@@ -486,7 +499,8 @@ while not quitGame:
             if len(strong) < 0.10*popSize:
                 print("Only %d worthy specimens, we need to add some more."%len(strong))
                 while len(strong) < 0.10*popSize:
-                    strong.append(np.random.choice(gds))
+                    strong.append(GameData(SnakeNN(
+            name=names[np.random.randint(0, len(names))] + ' ' + names[np.random.randint(0, len(names))])))
             else:
                 print("%d worthy specimens, now to make tons of snakelets." % len(strong))
 
