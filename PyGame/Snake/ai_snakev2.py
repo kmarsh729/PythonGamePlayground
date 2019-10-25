@@ -101,8 +101,8 @@ class SnakeNN:
         return self.output_nodes.argmax()
 
     # A long and tedious function to process location data for the snake
-    def preprocessInputs(self, direction, head_x, head_y, food_r, food_l, food_u, food_d, body_r, body_l, body_u,
-                         body_d):
+    def preprocessInputs(self, direction, head_x, head_y, food_x, food_y, body_r, body_l, body_u,
+                         body_d, timer):
         # Input Node Guide (All these should be normalized):
         # 0 - distance to wall from front of head
         # 1 - distance to wall from right of head
@@ -115,20 +115,16 @@ class SnakeNN:
         # 8 - distance to food from left of head. Also redundant but maybe add more food?
 
         if direction == 0:
-            return [1 - head_x / 40, 1 - head_y / 30, head_y / 30, body_r / 40, body_d / 30, body_u / 30, food_r / 40,
-                    food_d / 30, food_u / 30]
+            return [1 - head_x / 40, 1 - head_y / 30, head_y / 30, body_r / 40, body_d / 30, body_u / 30, food_x/40, food_y/30, timer]
 
         elif direction == 1:
-            return [head_x / 40, head_y / 30, 1 - head_y / 30, body_l / 40, body_u / 30, body_d / 30, food_l / 40,
-                    food_u / 30, food_d / 30]
+            return [head_x / 40, head_y / 30, 1 - head_y / 30, body_l / 40, body_u / 30, body_d / 30, food_x/40, food_y/30,timer]
 
         elif direction == 2:
-            return [head_y / 30, 1 - head_x / 40, head_x / 40, body_u / 30, body_r / 40, body_l / 40, food_u / 30,
-                    food_r / 40, food_l / 40]
+            return [head_y / 30, 1 - head_x / 40, head_x / 40, body_u / 30, body_r / 40, body_l / 40, food_x/40, food_y/30,timer]
 
         else:
-            return [1 - head_y / 30, head_x / 40, 1 - head_x / 40, body_d / 30, body_l / 40, body_r / 40, food_d / 30,
-                    food_l / 40, food_r / 40]
+            return [1 - head_y / 30, head_x / 40, 1 - head_x / 40, body_d / 30, body_l / 40, body_r / 40, food_x/40, food_y/30, timer]
 
 # Allow snakes to initiate coitus, to make sweet sweet love, to get their funk on, do it like they do on Discovery channel
 def mateSnakes(snake1,snake2, mutationRate):
@@ -162,10 +158,11 @@ class GameData:
         self.lives = 1
         self.isDead = False
         self.blocks = []
-        self.tick = 50#100
-        self.speed = 50#100
+        self.tick = 10#100
+        self.speed = 10#100
         self.level = 1
         self.berrycount = 0  # Number berries eaten
+        self.hungertimer = 0
         self.segments = 1  # Segments gained upon eating a berry
         self.frame = 0
         self.snakey = snake
@@ -361,6 +358,7 @@ def drawSnake(surface, img, gamedata):
 def updateMovement(gamedata):
     head = gamedata.blocks[0]
     if gamedata.tick < 0:
+        gamedata.hungertimer += 1
         gamedata.tick += gamedata.speed
         gamedata.berrycount += points_from_moving
         gamedata.frame += 1
@@ -398,8 +396,8 @@ def updateGame(gamedata, time):
     head = gamedata.blocks[0]
 
 
-    gamedata.snakey.fire(gamedata.snakey.preprocessInputs(gamedata.direction, head.x, head.y, headFromFoodRight(gamedata), headFromFoodLeft(gamedata), headFromFoodUp(gamedata), headFromFoodDown(gamedata), headFromBodyRight(gamedata), headFromBodyLeft(gamedata), headFromBodyUp(gamedata),
-                         headFromBodyDown(gamedata)))
+    gamedata.snakey.fire(gamedata.snakey.preprocessInputs(gamedata.direction, head.x, head.y, gamedata.berry.x, gamedata.berry.y, headFromBodyRight(gamedata), headFromBodyLeft(gamedata), headFromBodyUp(gamedata),
+                         headFromBodyDown(gamedata),sigmoid(gamedata.hungertimer)))
     directiondesired = gamedata.snakey.getBestDirection()
     if directiondesired == 0 and gamedata.direction != 1:
         gamedata.direction = 0
@@ -411,6 +409,7 @@ def updateGame(gamedata, time):
         gamedata.direction = 2
 
     if head.x == gamedata.berry.x and head.y == gamedata.berry.y:
+        gamedata.hungertimer = 0
         addSegment(gamedata)
         positionBerry(gamedata)
         gamedata.berrycount += points_from_berry
@@ -526,4 +525,4 @@ while not quitGame:
             #print(currentPopulation)
 
     pygame.display.update()
-    fpsClock.tick(30)
+    fpsClock.tick(90)
